@@ -1782,25 +1782,61 @@ static int shift_sh8804b_unprepare(struct drm_panel *panel)
 	return 0;
 }
 
-static const struct drm_display_mode shift_sh8804b_mode = {
-	.clock = (1080 + 16 + 8 + 8) * (2400 + 28 + 8 + 8) * 60 / 1000,
-	.hdisplay = 1080,
-	.hsync_start = 1080 + 16,
-	.hsync_end = 1080 + 16 + 8,
-	.htotal = 1080 + 16 + 8 + 8,
-	.vdisplay = 2400,
-	.vsync_start = 2400 + 28,
-	.vsync_end = 2400 + 28 + 8,
-	.vtotal = 2400 + 28 + 8 + 8,
-	.width_mm = 69,
-	.height_mm = 154,
-	.type = DRM_MODE_TYPE_DRIVER,
+static const struct drm_display_mode shift_sh8804b_modes[] = {
+	{ /* 60Hz mode */
+		.clock = (1080 + 16 + 8 + 8) * (2400 + 28 + 8 + 8) * 60 / 1000,
+		.hdisplay = 1080,
+		.hsync_start = 1080 + 16,
+		.hsync_end = 1080 + 16 + 8,
+		.htotal = 1080 + 16 + 8 + 8,
+		.vdisplay = 2400,
+		.vsync_start = 2400 + 28,
+		.vsync_end = 2400 + 28 + 8,
+		.vtotal = 2400 + 28 + 8 + 8,
+		.width_mm = 69,
+		.height_mm = 154,
+		.type = DRM_MODE_TYPE_DRIVER,
+	},
+	{ /* 90Hz mode */
+		.clock = (1080 + 16 + 8 + 8) * (2400 + 28 + 8 + 8) * 90 / 1000,
+		.hdisplay = 1080,
+		.hsync_start = 1080 + 16,
+		.hsync_end = 1080 + 16 + 8,
+		.htotal = 1080 + 16 + 8 + 8,
+		.vdisplay = 2400,
+		.vsync_start = 2400 + 28,
+		.vsync_end = 2400 + 28 + 8,
+		.vtotal = 2400 + 28 + 8 + 8,
+		.width_mm = 69,
+		.height_mm = 154,
+		.type = DRM_MODE_TYPE_DRIVER,
+	},
+	{ /* 120Hz mode */
+		.clock = (1080 + 16 + 8 + 8) * (2400 + 28 + 8 + 8) * 120 / 1000,
+		.hdisplay = 1080,
+		.hsync_start = 1080 + 16,
+		.hsync_end = 1080 + 16 + 8,
+		.htotal = 1080 + 16 + 8 + 8,
+		.vdisplay = 2400,
+		.vsync_start = 2400 + 28,
+		.vsync_end = 2400 + 28 + 8,
+		.vtotal = 2400 + 28 + 8 + 8,
+		.width_mm = 69,
+		.height_mm = 154,
+		.type = DRM_MODE_TYPE_DRIVER,
+	},
 };
 
 static int shift_sh8804b_get_modes(struct drm_panel *panel,
 						struct drm_connector *connector)
 {
-	return drm_connector_helper_get_modes_fixed(connector, &shift_sh8804b_mode);
+	int count = 0;
+
+	for (int i = 0; i < ARRAY_SIZE(shift_sh8804b_modes); i++)
+		count += drm_connector_helper_get_modes_fixed(connector,
+						    &shift_sh8804b_modes[i]);
+
+	return count;
 }
 
 static const struct drm_panel_funcs shift_sh8804b_panel_funcs = {
