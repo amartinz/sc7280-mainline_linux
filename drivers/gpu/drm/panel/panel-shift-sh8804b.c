@@ -1682,13 +1682,13 @@ static int shift_sh8804b_on(struct shift_sh8804b *ctx)
 	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0xb3, 0x01, 0x01, 0x00, 0xb0);
 
 	// 60 Hz
-	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0x70, 0x00);
+	//mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0x70, 0x00);
 
 	// 90 Hz
 	//mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0x70, 0x01);
 
 	// 120 Hz
-	//mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0x70, 0x02);
+	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0x70, 0x02);
 
 	mipi_dsi_usleep_range(&dsi_ctx, 5000, 6000);
 	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0x03, 0x11);
