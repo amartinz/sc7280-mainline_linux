@@ -1072,6 +1072,11 @@
 	status = "okay";
 };
 
+&venus {
+	firmware-name = "qcom/qcm6490/SHIFT/otter/venus.mbn";
+	status = "okay";
+};
+
 &wifi {
 	qcom,ath11k-calibration-variant = "SHIFTphone_8";
 
