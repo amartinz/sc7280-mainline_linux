@@ -14,17 +14,30 @@
 
 #include <drm/display/drm_dsc.h>
 #include <drm/display/drm_dsc_helper.h>
+#include <drm/drm_crtc.h>
 #include <drm/drm_mipi_dsi.h>
 #include <drm/drm_modes.h>
 #include <drm/drm_panel.h>
 #include <drm/drm_probe_helper.h>
 
+/* Manufacturer Command Set */
+#define MCS_SWITCH_HZ	0x70
+
 struct shift_sh8804b {
 	struct drm_panel panel;
+	struct drm_connector *connector;
 	struct mipi_dsi_device *dsi;
 	struct drm_dsc_config dsc;
 	struct regulator_bulk_data *supplies;
 	struct gpio_desc *reset_gpio;
+
+	int cur_mode;
+};
+
+struct shift_sh8804b_panel_mode {
+	const struct drm_display_mode mode;
+
+	const u8 switch_hz_value;
 };
 
 static const struct regulator_bulk_data shift_sh8804b_supplies[] = {
@@ -48,10 +61,114 @@ static void shift_sh8804b_reset(struct shift_sh8804b *ctx)
 	msleep(20);
 }
 
+static const struct shift_sh8804b_panel_mode shift_sh8804b_modes[] = {
+	{
+		.mode = {
+			.name = "1080x2400@120",
+			.clock = (1080 + 16 + 8 + 8) * (2400 + 28 + 8 + 8) * 120 / 1000,
+			.hdisplay = 1080,
+			.hsync_start = 1080 + 16,
+			.hsync_end = 1080 + 16 + 8,
+			.htotal = 1080 + 16 + 8 + 8,
+			.vdisplay = 2400,
+			.vsync_start = 2400 + 28,
+			.vsync_end = 2400 + 28 + 8,
+			.vtotal = 2400 + 28 + 8 + 8,
+			.width_mm = 69,
+			.height_mm = 154,
+			.type = DRM_MODE_TYPE_DRIVER,
+		},
+		.switch_hz_value = 0x2,
+	},
+	{
+		.mode = {
+			.name = "1080x2400@90",
+			.clock = (1080 + 16 + 8 + 8) * (2400 + 28 + 8 + 8) * 90 / 1000,
+			.hdisplay = 1080,
+			.hsync_start = 1080 + 16,
+			.hsync_end = 1080 + 16 + 8,
+			.htotal = 1080 + 16 + 8 + 8,
+			.vdisplay = 2400,
+			.vsync_start = 2400 + 28,
+			.vsync_end = 2400 + 28 + 8,
+			.vtotal = 2400 + 28 + 8 + 8,
+			.width_mm = 69,
+			.height_mm = 154,
+			.type = DRM_MODE_TYPE_DRIVER,
+		},
+		.switch_hz_value = 0x1,
+	},
+	{
+		.mode = {
+			.name = "1080x2400@60",
+			.clock = (1080 + 16 + 8 + 8) * (2400 + 28 + 8 + 8) * 60 / 1000,
+			.hdisplay = 1080,
+			.hsync_start = 1080 + 16,
+			.hsync_end = 1080 + 16 + 8,
+			.htotal = 1080 + 16 + 8 + 8,
+			.vdisplay = 2400,
+			.vsync_start = 2400 + 28,
+			.vsync_end = 2400 + 28 + 8,
+			.vtotal = 2400 + 28 + 8 + 8,
+			.width_mm = 69,
+			.height_mm = 154,
+			.type = DRM_MODE_TYPE_DRIVER,
+		},
+		.switch_hz_value = 0x0,
+	},
+};
+
+static int shift_sh8804b_get_modes(struct drm_panel *panel,
+						struct drm_connector *connector)
+{
+	struct shift_sh8804b *ctx = to_shift_sh8804b(panel);
+	int count = 0;
+
+	for (int i = 0; i < ARRAY_SIZE(shift_sh8804b_modes); i++)
+		count += drm_connector_helper_get_modes_fixed(connector,
+						    &shift_sh8804b_modes[i].mode);
+
+	ctx->connector = connector;
+
+	return count;
+}
+
+static int shift_sh8804b_get_current_mode(struct shift_sh8804b *ctx)
+{
+	struct drm_connector *connector = ctx->connector;
+	struct drm_crtc_state *crtc_state;
+	int i;
+
+	/* Return the default (first) mode if no info available yet */
+	if (!connector->state || !connector->state->crtc)
+		return 0;
+
+	crtc_state = connector->state->crtc->state;
+
+	for (i = 0; i < ARRAY_SIZE(shift_sh8804b_modes); i++) {
+		if (drm_mode_match(&crtc_state->mode,
+				   &shift_sh8804b_modes[i].mode,
+				   /*DRM_MODE_MATCH_TIMINGS | */DRM_MODE_MATCH_CLOCK))
+			return i;
+	}
+
+	return 0;
+}
+
+static void shift_sh8804b_set_switch_hz_value(struct mipi_dsi_multi_context *dsi_ctx,
+	u8 switch_hz_value)
+{
+	u8 cmd_switch_hz_value[] = { MCS_SWITCH_HZ, switch_hz_value };
+
+	mipi_dsi_dcs_write_buffer_multi(dsi_ctx, cmd_switch_hz_value,
+		ARRAY_SIZE(cmd_switch_hz_value));
+}
+
 static int shift_sh8804b_on(struct shift_sh8804b *ctx)
 {
 	struct mipi_dsi_multi_context dsi_ctx = { .dsi = ctx->dsi };
 
+	ctx->cur_mode = shift_sh8804b_get_current_mode(ctx);
 	ctx->dsi->mode_flags |= MIPI_DSI_MODE_LPM;
 
 	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0xf0, 0x3c, 0x3c);
@@ -1681,14 +1798,8 @@ static int shift_sh8804b_on(struct shift_sh8804b *ctx)
 	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0xff, 0x3c, 0x0b);
 	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0xb3, 0x01, 0x01, 0x00, 0xb0);
 
-	// 60 Hz
-	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0x70, 0x00);
-
-	// 90 Hz
-	//mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0x70, 0x01);
-
-	// 120 Hz
-	//mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0x70, 0x02);
+	shift_sh8804b_set_switch_hz_value(&dsi_ctx,
+				     shift_sh8804b_modes[ctx->cur_mode].switch_hz_value);
 
 	mipi_dsi_usleep_range(&dsi_ctx, 5000, 6000);
 	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0x03, 0x11);
@@ -1780,27 +1891,6 @@ static int shift_sh8804b_unprepare(struct drm_panel *panel)
 	regulator_bulk_disable(ARRAY_SIZE(shift_sh8804b_supplies), ctx->supplies);
 
 	return 0;
-}
-
-static const struct drm_display_mode shift_sh8804b_mode = {
-	.clock = (1080 + 16 + 8 + 8) * (2400 + 28 + 8 + 8) * 60 / 1000,
-	.hdisplay = 1080,
-	.hsync_start = 1080 + 16,
-	.hsync_end = 1080 + 16 + 8,
-	.htotal = 1080 + 16 + 8 + 8,
-	.vdisplay = 2400,
-	.vsync_start = 2400 + 28,
-	.vsync_end = 2400 + 28 + 8,
-	.vtotal = 2400 + 28 + 8 + 8,
-	.width_mm = 69,
-	.height_mm = 154,
-	.type = DRM_MODE_TYPE_DRIVER,
-};
-
-static int shift_sh8804b_get_modes(struct drm_panel *panel,
-						struct drm_connector *connector)
-{
-	return drm_connector_helper_get_modes_fixed(connector, &shift_sh8804b_mode);
 }
 
 static const struct drm_panel_funcs shift_sh8804b_panel_funcs = {
